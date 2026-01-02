@@ -1,0 +1,45 @@
+{
+  "name": "realflow-api",
+  "version": "1.0.0",
+  "description": "SQL Server 2016 RealFlow数据查询API服务",
+  "main": "server.js",
+  "author": "RealFlow API Team",
+  "license": "ISC",
+  "homepage": "",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "realflow",
+    "sql-server",
+    "express",
+    "api",
+    "nodejs",
+    "restful"
+  ],
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=6.0.0"
+  },
+  "scripts": {
+    "start": "node server-node16.js",
+    "test": "node server-test.js",
+    "dev": "nodemon server-node16.js",
+    "test-dev": "nodemon server-test.js",
+    "lint": "eslint *.js",
+    "info": "node info.js"
+  },
+  "dependencies": {
+    "express": "^4.17.3",
+    "mssql": "^7.3.5",
+    "cors": "^2.8.5",
+    "dotenv": "^10.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.15"
+  },
+  "bugs": {
+    "url": ""
+  }
+}
