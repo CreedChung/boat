@@ -6,8 +6,6 @@
  * - SQL Server 2016数据查询
  * - RESTful API接口
  * 
- * 作者：RealFlow API Team
- * 版本：1.0.0
  */
 
 const express = require('express');
