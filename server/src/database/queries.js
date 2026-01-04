@@ -83,12 +83,18 @@ class DatabaseQueries {
             const startTime = record['开始时间'];
             const endTime = record['结束时间'];
 
+            // 调试输出
+            console.log(`🔍 检查记录 ${record['序号']}: 开始="${startTime}", 结束="${endTime}"`);
+
             // 判断是否为占位符（占位符格式为10根横线 "----------"）
             const isStartPlaceholder = !startTime || startTime === '' || startTime === '----------';
             const isEndPlaceholder = !endTime || endTime === '' || endTime === '----------';
 
+            console.log(`🔍 占位符判断: 开始=${isStartPlaceholder}, 结束=${isEndPlaceholder}`);
+
             if (!isStartPlaceholder && isEndPlaceholder) {
                 // 作业开始记录 - 结束时间是占位符
+                console.log(`✅ 识别为开始记录，加入待配对队列 - 序号: ${record['序号']}`);
                 pendingRecords.push({
                     ...record,
                     status: 'started',
@@ -96,6 +102,7 @@ class DatabaseQueries {
                 });
             } else if (isStartPlaceholder && !isEndPlaceholder) {
                 // 作业结束记录 - 开始时间是占位符
+                console.log(`✅ 识别为结束记录，尝试配对 - 序号: ${record['序号']}`);
                 // 寻找对应的开始记录
                 const matchingStartIndex = pendingRecords.findIndex(pending =>
                     pending['航次'] === record['航次'] &&
@@ -105,6 +112,7 @@ class DatabaseQueries {
 
                 if (matchingStartIndex !== -1) {
                     const startRecord = pendingRecords[matchingStartIndex];
+                    console.log(`🎉 配对成功! 开始记录序号: ${startRecord['序号']}, 结束记录序号: ${record['序号']}`);
                     // 创建完整的作业记录
                     const processedRecord = {
                         序号: startRecord['序号'],
