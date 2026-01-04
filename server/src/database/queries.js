@@ -83,9 +83,9 @@ class DatabaseQueries {
             const startTime = record['开始时间'];
             const endTime = record['结束时间'];
 
-            // 判断是否为占位符（假设占位符为 NULL 或空字符串）
-            const isStartPlaceholder = !startTime || startTime === '' || startTime === '占位符';
-            const isEndPlaceholder = !endTime || endTime === '' || endTime === '占位符';
+            // 判断是否为占位符（占位符格式为10根横线 "----------"）
+            const isStartPlaceholder = !startTime || startTime === '' || startTime === '----------';
+            const isEndPlaceholder = !endTime || endTime === '' || endTime === '----------';
 
             if (!isStartPlaceholder && isEndPlaceholder) {
                 // 作业开始记录 - 结束时间是占位符
