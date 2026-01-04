@@ -132,31 +132,13 @@ class DatabaseQueries {
                     // 未找到匹配的开始记录，可能是异常数据
                     console.warn(`⚠️  找到结束记录但未找到匹配的开始记录 - 序号: ${record['序号']}, 航次: ${record['航次']}`);
                 }
-            } else if (!isStartPlaceholder && !isEndPlaceholder) {
-                // 完整的记录（开始和结束时间都存在）
-                processedRecords.push({
-                    ...record,
-                    status: 'complete',
-                    duration: this.calculateDuration(startTime, endTime)
-                });
             } else {
-                // 异常情况：开始和结束时间都是占位符
-                console.warn(`⚠️  发现异常记录 - 序号: ${record['序号']}, 开始和结束时间都是占位符`);
+                // 跳过中间过程记录（开始和结束时间都是占位符）或异常记录
+                console.log(`ℹ️  跳过中间过程记录 - 序号: ${record['序号']}`);
             }
         }
 
-        // 处理未配对的记录（开始记录没有对应的结束记录）
-        if (pendingRecords.length > 0) {
-            console.warn(`⚠️  发现 ${pendingRecords.length} 条未完成的作业记录`);
-            for (const pending of pendingRecords) {
-                processedRecords.push({
-                    ...pending,
-                    status: 'incomplete',
-                    endTime: null,
-                    duration: null
-                });
-            }
-        }
+        // 注意：不返回未配对的记录，只返回成功配对的完整记录
 
         return processedRecords;
     }
