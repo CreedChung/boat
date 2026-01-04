@@ -9,7 +9,8 @@
  * 版本：1.0.0
  */
 
-const sql = require('mssql');
+// sql module imported but not currently used since we removed getAllData() and getSingleData()
+// const sql = require('mssql');
 
 class DatabaseQueries {
     constructor(dbConnection) {
@@ -17,12 +18,16 @@ class DatabaseQueries {
     }
 
     /**
-     * 获取所有realflow数据（COMID = 98）
+     * 获取处理后的船舶数据（智能处理开始时间和结束时间占位符）
+     * 逻辑说明：
+     * - 当开始时间存在，结束时间为占位符时，表示作业开始
+     * - 当开始时间为占位符，结束时间存在时，表示作业结束
+     * - 通过配对这两个记录来确定完整的作业时间段
      */
-    getAllData() {
+    getProcessedShipData() {
         return new Promise((resolve, reject) => {
             const query = `
-                SELECT 
+                SELECT
                     [序号],
                     [开始时间],
                     [结束时间],
@@ -39,22 +44,26 @@ class DatabaseQueries {
                     [累计质量]
                 FROM [dbo].[realflow5m]
                 WHERE [COMID] = 98
-                ORDER BY [序号] DESC
+                ORDER BY [序号] ASC
             `;
 
             this.db.getPool().request().query(query)
                 .then(result => {
+                    const records = result.recordset;
+                    const processedData = this.processTimeSlots(records);
+
                     resolve({
                         success: true,
-                        data: result.recordset,
-                        count: result.recordset.length
+                        data: processedData,
+                        count: processedData.length,
+                        totalRecords: records.length
                     });
                 })
                 .catch(error => {
-                    console.error('❌ 查询所有数据失败:', error.message);
+                    console.error('❌ 查询处理后数据失败:', error.message);
                     reject({
                         success: false,
-                        message: '查询数据失败',
+                        message: '查询处理后数据失败',
                         error: error.message
                     });
                 });
@@ -62,58 +71,119 @@ class DatabaseQueries {
     }
 
     /**
-     * 获取单条realflow数据（COMID = 98）
-     * @param {number} recordId - 记录序号
+     * 处理时间段数据，将占位符配对成完整的作业记录
+     * @param {Array} records - 原始数据记录
+     * @returns {Array} 处理后的数据
      */
-    getSingleData(recordId) {
-        return new Promise((resolve, reject) => {
-            const query = `
-                SELECT 
-                    [序号],
-                    [开始时间],
-                    [结束时间],
-                    [存盘时间],
-                    [航次],
-                    [船名],
-                    [呼号],
-                    [油品名],
-                    [温度],
-                    [密度],
-                    [瞬时流量],
-                    [瞬时质量],
-                    [累计流量],
-                    [累计质量]
-                FROM [dbo].[realflow5m]
-                WHERE [序号] = @id AND [COMID] = 98
-            `;
+    processTimeSlots(records) {
+        const processedRecords = [];
+        const pendingRecords = []; // 待配对的记录
 
-            this.db.getPool().request()
-                .input('id', sql.Int, recordId)
-                .query(query)
-                .then(result => {
-                    if (result.recordset.length === 0) {
-                        resolve({
-                            success: false,
-                            message: '未找到指定记录',
-                            recordId: recordId
-                        });
-                    } else {
-                        resolve({
-                            success: true,
-                            data: result.recordset[0]
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error(`❌ 查询单条记录失败 (ID: ${recordId}):`, error.message);
-                    reject({
-                        success: false,
-                        message: '查询单条记录失败',
-                        error: error.message,
-                        recordId: recordId
-                    });
+        for (const record of records) {
+            const startTime = record['开始时间'];
+            const endTime = record['结束时间'];
+
+            // 判断是否为占位符（假设占位符为 NULL 或空字符串）
+            const isStartPlaceholder = !startTime || startTime === '' || startTime === '占位符';
+            const isEndPlaceholder = !endTime || endTime === '' || endTime === '占位符';
+
+            if (!isStartPlaceholder && isEndPlaceholder) {
+                // 作业开始记录 - 结束时间是占位符
+                pendingRecords.push({
+                    ...record,
+                    status: 'started',
+                    startTime: startTime
                 });
-        });
+            } else if (isStartPlaceholder && !isEndPlaceholder) {
+                // 作业结束记录 - 开始时间是占位符
+                // 寻找对应的开始记录
+                const matchingStartIndex = pendingRecords.findIndex(pending =>
+                    pending['航次'] === record['航次'] &&
+                    pending['船名'] === record['船名'] &&
+                    pending.status === 'started'
+                );
+
+                if (matchingStartIndex !== -1) {
+                    const startRecord = pendingRecords[matchingStartIndex];
+                    // 创建完整的作业记录
+                    const processedRecord = {
+                        序号: startRecord['序号'],
+                        开始时间: startRecord.startTime,
+                        结束时间: endTime,
+                        存盘时间: record['存盘时间'],
+                        航次: record['航次'],
+                        船名: record['船名'],
+                        呼号: record['呼号'],
+                        油品名: record['油品名'],
+                        温度: record['温度'],
+                        密度: record['密度'],
+                        瞬时流量: record['瞬时流量'],
+                        瞬时质量: record['瞬时质量'],
+                        累计流量: record['累计流量'],
+                        累计质量: record['累计质量'],
+                        status: 'completed',
+                        duration: this.calculateDuration(startRecord.startTime, endTime)
+                    };
+
+                    processedRecords.push(processedRecord);
+                    // 移除已配对的记录
+                    pendingRecords.splice(matchingStartIndex, 1);
+                } else {
+                    // 未找到匹配的开始记录，可能是异常数据
+                    console.warn(`⚠️  找到结束记录但未找到匹配的开始记录 - 序号: ${record['序号']}, 航次: ${record['航次']}`);
+                }
+            } else if (!isStartPlaceholder && !isEndPlaceholder) {
+                // 完整的记录（开始和结束时间都存在）
+                processedRecords.push({
+                    ...record,
+                    status: 'complete',
+                    duration: this.calculateDuration(startTime, endTime)
+                });
+            } else {
+                // 异常情况：开始和结束时间都是占位符
+                console.warn(`⚠️  发现异常记录 - 序号: ${record['序号']}, 开始和结束时间都是占位符`);
+            }
+        }
+
+        // 处理未配对的记录（开始记录没有对应的结束记录）
+        if (pendingRecords.length > 0) {
+            console.warn(`⚠️  发现 ${pendingRecords.length} 条未完成的作业记录`);
+            for (const pending of pendingRecords) {
+                processedRecords.push({
+                    ...pending,
+                    status: 'incomplete',
+                    endTime: null,
+                    duration: null
+                });
+            }
+        }
+
+        return processedRecords;
+    }
+
+    /**
+     * 计算时间持续时长
+     * @param {string|Date} startTime - 开始时间
+     * @param {string|Date} endTime - 结束时间
+     * @returns {string} 持续时长（小时:分钟:秒）
+     */
+    calculateDuration(startTime, endTime) {
+        try {
+            const start = new Date(startTime);
+            const end = new Date(endTime);
+            const diffMs = end - start;
+
+            if (diffMs <= 0) return '00:00:00';
+
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+            return `${diffHours.toString().padStart(2, '0')}:${diffMinutes.toString().padStart(2, '0')}:${diffSeconds.toString().padStart(2, '0')}`;
+        } catch (error) {
+            console.warn('⚠️  计算持续时长失败:', error.message);
+            return null;
+        }
     }
 }
 

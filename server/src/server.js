@@ -48,8 +48,7 @@ app.get('/', (req, res) => {
         endpoints: {
             'GET /': '服务信息',
             'GET /health': '健康检查',
-            'GET /api/realflow-data': '获取所有COMID=98的数据',
-            'GET /api/realflow-data/:id': '获取指定序号的单条记录'
+            'GET /api/realflow-processed': '获取智能处理后的船舶数据（配对开始/结束时间占位符）'
         },
         timestamp: new Date().toISOString()
     });
@@ -73,9 +72,10 @@ app.get('/health', (req, res) => {
 });
 
 /**
- * 获取所有realflow数据
+ * 获取智能处理后的船舶数据
+ * 该接口会智能处理开始时间和结束时间的占位符，将它们配对成完整的作业记录
  */
-app.get('/api/realflow-data', (req, res) => {
+app.get('/api/realflow-processed', (req, res) => {
     // 确保数据库连接
     if (!dbConnection.isConnected()) {
         dbConnection.connect()
@@ -93,77 +93,17 @@ app.get('/api/realflow-data', (req, res) => {
     }
 
     function executeQuery() {
-        dbQueries.getAllData()
+        dbQueries.getProcessedShipData()
             .then(result => {
-                console.log(`✅ 查询成功，返回 ${result.count} 条记录`);
+                console.log(`✅ 智能处理查询成功，返回 ${result.count} 条处理后的记录（共 ${result.totalRecords} 条原始记录）`);
                 res.json({
                     success: true,
                     data: result.data,
                     count: result.count,
+                    totalRecords: result.totalRecords,
+                    description: '智能处理后的船舶数据，已配对开始/结束时间占位符',
                     timestamp: new Date().toISOString()
                 });
-            })
-            .catch(error => {
-                res.status(500).json({
-                    success: false,
-                    message: error.message,
-                    timestamp: new Date().toISOString()
-                });
-            });
-    }
-});
-
-/**
- * 获取单条realflow数据
- */
-app.get('/api/realflow-data/:id', (req, res) => {
-    const recordId = parseInt(req.params.id);
-    
-    // 输入验证
-    if (isNaN(recordId) || recordId <= 0) {
-        return res.status(400).json({
-            success: false,
-            message: '无效的记录ID',
-            error: '记录ID必须是正整数',
-            timestamp: new Date().toISOString()
-        });
-    }
-
-    // 确保数据库连接
-    if (!dbConnection.isConnected()) {
-        dbConnection.connect()
-            .then(() => executeQuery())
-            .catch(error => {
-                res.status(500).json({
-                    success: false,
-                    message: '数据库连接失败',
-                    error: error.message,
-                    timestamp: new Date().toISOString()
-                });
-            });
-    } else {
-        executeQuery();
-    }
-
-    function executeQuery() {
-        dbQueries.getSingleData(recordId)
-            .then(result => {
-                if (!result.success) {
-                    console.log(`⚠️  未找到ID为 ${recordId} 的记录`);
-                    res.status(404).json({
-                        success: false,
-                        message: result.message,
-                        recordId: recordId,
-                        timestamp: new Date().toISOString()
-                    });
-                } else {
-                    console.log(`✅ 查询成功，返回ID为 ${recordId} 的记录`);
-                    res.json({
-                        success: true,
-                        data: result.data,
-                        timestamp: new Date().toISOString()
-                    });
-                }
             })
             .catch(error => {
                 res.status(500).json({
@@ -221,8 +161,7 @@ const server = app.listen(PORT, () => {
     console.log('📋 可用接口:');
     console.log(`   GET  http://localhost:${PORT}/`);
     console.log(`   GET  http://localhost:${PORT}/health`);
-    console.log(`   GET  http://localhost:${PORT}/api/realflow-data`);
-    console.log(`   GET  http://localhost:${PORT}/api/realflow-data/:id`);
+    console.log(`   GET  http://localhost:${PORT}/api/realflow-processed`);
     console.log('');
 });
 
