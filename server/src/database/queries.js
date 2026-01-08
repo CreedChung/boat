@@ -86,9 +86,17 @@ class DatabaseQueries {
             // 调试输出
             console.log(`🔍 检查记录 ${record['序号']}: 开始="${startTime}", 结束="${endTime}"`);
 
-            // 判断是否为占位符（占位符格式为10根横线 "----------"）
-            const isStartPlaceholder = !startTime || startTime === '' || startTime === '----------';
-            const isEndPlaceholder = !endTime || endTime === '' || endTime === '----------';
+            // 判断是否为有效时间格式（包含数字的就是时间，占位符没有数字）
+            const isValidTimeFormat = (timeStr) => {
+                // 如果为空、null、undefined或不是字符串，则不是有效时间
+                if (!timeStr || typeof timeStr !== 'string') return false;
+                // 有效时间必须包含数字（年月日时分秒）
+                const hasNumbers = /\d/.test(timeStr);
+                return hasNumbers;
+            };
+
+            const isStartPlaceholder = !isValidTimeFormat(startTime);
+            const isEndPlaceholder = !isValidTimeFormat(endTime);
 
             console.log(`🔍 占位符判断: 开始=${isStartPlaceholder}, 结束=${isEndPlaceholder}`);
 
@@ -113,24 +121,15 @@ class DatabaseQueries {
                 if (matchingStartIndex !== -1) {
                     const startRecord = pendingRecords[matchingStartIndex];
                     console.log(`🎉 配对成功! 开始记录序号: ${startRecord['序号']}, 结束记录序号: ${record['序号']}`);
-                    // 创建完整的作业记录
+                    // 创建完整的作业记录，只返回用户需要的字段
                     const processedRecord = {
-                        序号: startRecord['序号'],
                         开始时间: startRecord.startTime,
                         结束时间: endTime,
-                        存盘时间: record['存盘时间'],
                         航次: record['航次'],
                         船名: record['船名'],
-                        呼号: record['呼号'],
-                        油品名: record['油品名'],
                         温度: record['温度'],
                         密度: record['密度'],
-                        瞬时流量: record['瞬时流量'],
-                        瞬时质量: record['瞬时质量'],
-                        累计流量: record['累计流量'],
-                        累计质量: record['累计质量'],
-                        status: 'completed',
-                        duration: this.calculateDuration(startRecord.startTime, endTime)
+                        累计质量: record['累计质量']
                     };
 
                     processedRecords.push(processedRecord);
